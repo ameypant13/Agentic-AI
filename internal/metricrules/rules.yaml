@@ -1,0 +1,179 @@
+# Metric rules: PromQL evaluated every minute through Grafana (Thanos), one query per
+# rule covering every cluster of an instance. An expr returns only the series that are
+# a problem; each returned series is one active issue. Every expr must keep the
+# `cluster` label, plus whatever identifies the entity (namespace/pod/container, node,
+# persistentvolumeclaim, deployment, job). `value` says how to show the series value.
+version: 1
+rules:
+  - id: container-memory-near-limit
+    title: Memory near its limit
+    severity: warning
+    entity: container
+    value: percent
+    expr: |
+      max by (cluster, namespace, pod, container) (container_memory_working_set_bytes{container!="", container!="POD"})
+        / on (cluster, namespace, pod, container)
+      max by (cluster, namespace, pod, container) (kube_pod_container_resource_limits{resource="memory"}) > 0.9
+    meaning: The container uses over 90% of its memory limit and will be OOM-killed if it keeps growing.
+    fix: Check for a leak or a heavy job in its logs; raise the memory limit if the load is legitimate.
+
+  - id: container-oomkilled
+    title: Container OOM-killed
+    severity: error
+    entity: container
+    value: count
+    expr: |
+      max by (cluster, namespace, pod, container) (increase(kube_pod_container_status_restarts_total[30m])) > 0
+        and on (cluster, namespace, pod, container)
+      max by (cluster, namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}) == 1
+    meaning: The container was killed for exceeding its memory limit in the last 30 minutes.
+    fix: Raise the memory limit or find what spiked memory (heap dump, job size) before it repeats.
+
+  - id: container-restarting
+    title: Restarting repeatedly
+    severity: warning
+    entity: container
+    value: count
+    expr: |
+      max by (cluster, namespace, pod, container) (increase(kube_pod_container_status_restarts_total[30m])) > 2
+    meaning: The container restarted more than twice in the last 30 minutes.
+    fix: Read the previous container's logs for the crash reason.
+
+  - id: pod-crashloop
+    title: CrashLoopBackOff
+    severity: error
+    entity: container
+    value: none
+    expr: |
+      max by (cluster, namespace, pod, container) (kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}) == 1
+    meaning: The container keeps crashing on start and Kubernetes is backing off restarts.
+    fix: The fatal error is in the previous container's logs; fix the config or dependency it names.
+
+  - id: image-pull-failing
+    title: Image pull failing
+    severity: error
+    entity: container
+    value: none
+    expr: |
+      max by (cluster, namespace, pod, container) (kube_pod_container_status_waiting_reason{reason=~"ImagePullBackOff|ErrImagePull"}) == 1
+    meaning: The node cannot pull the container image, so the container never starts.
+    fix: Check the image tag exists and that the cluster can authenticate to the registry (pull secret / AcrPull / ECR access).
+
+  - id: pod-not-running
+    title: Pod stuck Pending
+    severity: warning
+    entity: pod
+    value: none
+    expr: |
+      min_over_time(sum by (cluster, namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown"})[15m:1m]) > 0
+    meaning: The pod has not been running for at least 15 minutes.
+    fix: "Look at the pod's events: usually unschedulable (resources, taints) or a failing init container."
+
+  - id: deployment-replicas-unavailable
+    title: Deployment missing replicas
+    severity: warning
+    entity: deployment
+    value: count
+    expr: |
+      min_over_time((max by (cluster, namespace, deployment) (kube_deployment_spec_replicas)
+        - max by (cluster, namespace, deployment) (kube_deployment_status_replicas_available))[15m:1m]) > 0
+    meaning: Fewer replicas have been available than desired for 15 minutes.
+    fix: Check the deployment's pods for crash loops, image pulls or scheduling problems.
+
+  - id: jvm-heap-high
+    title: JVM heap above 90%
+    severity: warning
+    entity: pod
+    value: percent
+    expr: |
+      (sum by (cluster, namespace, job, pod) (rate(jvm_memory_used_bytes_sum{region="heap"}[5m]))
+        / sum by (cluster, namespace, job, pod) (rate(jvm_memory_used_bytes_count{region="heap"}[5m])))
+      / on (cluster, namespace, job, pod)
+      max by (cluster, namespace, job, pod) (jvm_memory_max_bytes{region="heap"} > 0) > 0.9
+    meaning: The service's JVM heap is over 90% of its maximum; GC pauses and OutOfMemoryError follow.
+    fix: Look for a memory-heavy request or job in the logs; raise -Xmx together with the container limit if needed.
+
+  - id: jvm-gc-time-high
+    title: Spending >20% of time in GC
+    severity: warning
+    entity: pod
+    value: percent
+    expr: |
+      sum by (cluster, namespace, job, pod) (rate(jvm_gc_seconds_sum[5m])) > 0.2
+    meaning: The JVM spends more than a fifth of its time collecting garbage, so requests slow down.
+    fix: Usually a heap too small for the load; check heap usage and recent memory-heavy operations.
+
+  - id: http-5xx-rate-high
+    title: HTTP 5xx error rate above 5%
+    severity: error
+    entity: service
+    value: percent
+    expr: |
+      (sum by (cluster, namespace, job) (rate(span_processing_time_seconds_count{span_kind="server", http_status_code=~"5.."}[10m]))
+        / sum by (cluster, namespace, job) (rate(span_processing_time_seconds_count{span_kind="server"}[10m])) > 0.05)
+      and on (cluster, namespace, job)
+      sum by (cluster, namespace, job) (rate(span_processing_time_seconds_count{span_kind="server"}[10m])) > 0.05
+    meaning: Over 5% of the service's HTTP requests failed with a server error in the last 10 minutes.
+    fix: Check the service's logs for the failing operation; the log parser usually names it.
+
+  - id: http-p95-slow
+    title: Slow requests (p95 above 5 s)
+    severity: warning
+    entity: service
+    value: seconds
+    expr: |
+      histogram_quantile(0.95, sum by (le, cluster, namespace, job) (rate(span_processing_time_seconds_bucket{span_kind="server"}[10m]))) > 5
+    meaning: One in twenty HTTP requests to this service took longer than 5 seconds over the last 10 minutes.
+    fix: Check heap/GC and the DB/metadata dependencies of the slow operation.
+
+  - id: akka-dead-letters
+    title: Akka dead letters piling up
+    severity: warning
+    entity: pod
+    value: rate
+    expr: |
+      sum by (cluster, namespace, job, pod) (rate(akka_system_dead_letters_total[10m])) > 5
+    meaning: Messages are being sent to stopped actors at a high rate, usually after an actor crashed or a stream broke.
+    fix: Read the service logs around the start of the spike for the actor failure.
+
+  - id: pvc-almost-full
+    title: Volume almost full
+    severity: warning
+    entity: pvc
+    value: percent
+    expr: |
+      max by (cluster, namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes)
+        / max by (cluster, namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes) > 0.85
+    meaning: The persistent volume is over 85% full; the service fails when it fills up.
+    fix: Expand the PVC (the storage class allows it on GKE/AKS/EKS) or clean up old data.
+
+  - id: node-not-ready
+    title: Node not ready
+    severity: error
+    entity: node
+    value: none
+    expr: |
+      max by (cluster, node) (kube_node_status_condition{condition="Ready", status="true"}) == 0
+    meaning: The node is not ready; pods on it are being evicted or are unreachable.
+    fix: Check the node's conditions and events in the cloud console; the node pool may be replacing it.
+
+  - id: node-pressure
+    title: Node under pressure
+    severity: error
+    entity: node
+    value: none
+    expr: |
+      max by (cluster, node, condition) (kube_node_status_condition{condition=~"MemoryPressure|DiskPressure|PIDPressure", status="true"}) == 1
+    meaning: The kubelet reports memory, disk or PID pressure and starts evicting pods.
+    fix: Find the pods using the resource on that node; add capacity or move heavy workloads.
+
+  - id: cluster-memory-requests-high
+    title: Cluster memory almost fully requested
+    severity: warning
+    entity: cluster
+    value: percent
+    expr: |
+      sum by (cluster) (kube_pod_container_resource_requests{resource="memory"})
+        / sum by (cluster) (kube_node_status_allocatable{resource="memory"}) > 0.9
+    meaning: Over 90% of the cluster's allocatable memory is requested; new or restarted pods may not schedule.
+    fix: Add a node (or a larger node pool) or lower requests of over-provisioned workloads.

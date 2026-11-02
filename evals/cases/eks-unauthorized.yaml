@@ -1,0 +1,22 @@
+id: eks-unauthorized
+title: The console's cluster access fails because the EKS access entry is missing
+question: Why can't the console open the acxiom-prod cluster? Pods and nodes all fail to load.
+fixtures:
+  - tool: k8s_list_nodes
+    error: "Unauthorized"
+  - tool: k8s_list_pods
+    error: "Unauthorized"
+  - tool: get_infrastructure
+    output: {id: infra-acx, clusterName: acxiom-prod, provider: aws, region: us-east-1, status: OPERATIONAL, kubernetesVersion: "1.31",
+             details: {authenticationMode: API, accessEntries: [{principalArn: "arn:aws:iam::222:role/acxiom-admins", policies: [AmazonEKSClusterAdminPolicy]}]}}
+  - tool: find_control_plane
+    output: {matches: [{id: cp-acx, customerName: acxiom, clusterName: acxiom-prod, provider: aws, status: OPERATIONAL, infrastructureId: infra-acx}]}
+  - tool: read_knowledge_node
+    output: "control-hub reaches EKS clusters with its IAM user arn:aws:iam::111:user/control-hub. Clusters in API authentication mode need an EKS access entry for that principal (AmazonEKSClusterAdminPolicy or a read policy); clusters in CONFIG_MAP mode need it in aws-auth."
+  - tool: current_issues
+    output: "no current issues for acxiom-prod (metrics only)"
+expect:
+  categories: [cloud-permissions]
+  rootCause:
+    - [access entr, aws-auth]
+  maxToolCalls: 10

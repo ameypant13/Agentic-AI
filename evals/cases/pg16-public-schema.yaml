@@ -1,0 +1,40 @@
+id: pg16-public-schema
+title: Prophecy never comes up on Postgres 16 because the public schema grant is missing
+question: capgroup's control plane has been stuck on "waiting for Prophecy" for an hour after an upgrade to Postgres 16. Why?
+fixtures:
+  - tool: find_control_plane
+    output:
+      matches:
+        - {id: cp-cap, realm: sap, customerName: capgroup, url: capgroup.app.prophecy.ai, provider: gcp, region: us-east1, status: OPERATIONAL, postDeployStatus: running}
+  - tool: get_control_plane_env_status
+    output: {prophecyStatus: WAITING, servicesDown: [metagraph, app], message: "waiting for metagraph"}
+  - tool: get_post_deploy_info
+    output: {status: running, step: "waiting for Prophecy services", startedAt: "2026-10-12T08:00:00Z"}
+  - tool: athena_read
+    match: {view: prophecy}
+    output: {controlPlane: {id: cp-cap}, view: prophecy_status, data: {isProphecyDown: true, isAnyServiceDown: true, message: "metagraph not ready"}}
+  - tool: athena_read
+    output: {controlPlane: {id: cp-cap}, data: {components: [{name: metagraph, status: DOWN}, {name: postgres, status: UP, version: "16.4"}]}}
+  - tool: k8s_list_pods
+    output:
+      - {name: metagraph-0, namespace: prophecy, status: Running, ready: "0/1", restarts: 23, issue: CrashLoopBackOff, issueSeverity: critical}
+      - {name: postgres-0, namespace: prophecy, status: Running, ready: "1/1", restarts: 0}
+  - tool: k8s_pod_logs
+    match: {pod: metagraph}
+    output: {container: metagraph, lines: ["Flyway: Migrating schema \"public\" to version 1 - init", "ERROR: permission denied for schema public", "Position: 14", "Application startup failed"]}
+  - tool: k8s_pod_logs
+    match: {pod: postgres}
+    output: {container: postgres, lines: ["PostgreSQL 16.4 on x86_64", "ERROR:  permission denied for schema public at character 14", "STATEMENT:  CREATE TABLE flyway_schema_history"]}
+  - tool: k8s_describe_pod
+    output: {name: metagraph-0, containers: [{name: metagraph, state: "Waiting: CrashLoopBackOff", lastTerminated: "Error, exit code 1", restarts: 23}]}
+  - tool: search_controlhub_logs
+    output: {lines: ["[INFO] cp-cap addusers.sh: created role sdl", "[INFO] cp-cap addusers.sh: GRANT ALL ON DATABASE metadata TO sdl"]}
+  - tool: current_issues
+    output: "capgroup: metagraph CrashLoopBackOff (23 restarts in 1h)"
+expect:
+  categories: [athena-postdeploy, configuration, control-hub-bug, helm-kubernetes]
+  rootCause:
+    - [schema public, public schema]
+    - [grant, create privilege, CREATE on]
+  mustNot: [out of memory, OOMKilled]
+  maxToolCalls: 18

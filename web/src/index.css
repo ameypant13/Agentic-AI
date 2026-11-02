@@ -1,0 +1,338 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Colour tokens as RGB channels (see tailwind.config.js). Light values are the original hex codes.
+ * `html.dark` switches every page to dark without touching page code; the toggle lives in the header.
+ */
+:root {
+  --c-page: 246 247 249; /* #F6F7F9 */
+  --c-surface: 255 255 255; /* bg-white */
+  --c-subtle: 250 250 251; /* #FAFAFB table heads */
+  --c-hover: 238 240 244; /* #EEF0F4 nav hover */
+  --c-ink: 15 23 42; /* #0F172A */
+  --c-ink-bg: 15 23 42;
+  --c-muted: 71 85 105; /* #475569 */
+  --c-line: 226 232 240; /* #E2E8F0 */
+  --c-hairline: 241 245 249; /* #F1F5F9 */
+  --c-violet: 91 33 182; /* #5B21B6 */
+  --c-violet-bg: 91 33 182;
+  --c-violet-line: 91 33 182;
+  --c-violet-hover: 59 15 140; /* #3B0F8C */
+  --c-violet-hover-bg: 59 15 140;
+  --c-violet-tint: 237 233 254; /* #EDE9FE */
+  --c-violet-border: 196 181 253; /* #C4B5FD */
+  --c-crit-fg: 153 27 27;
+  --c-crit-bg: 254 226 226;
+  --c-warn-fg: 146 64 14;
+  --c-warn-bg: 254 243 199;
+  --c-warn-border: 245 158 11;
+  --c-ok-fg: 6 95 70;
+  --c-ok-bg: 209 250 229;
+  --c-info-fg: 30 64 175;
+  --c-info-bg: 219 234 254;
+  /* Tailwind slate, split by use */
+  --c-slate-50-bg: 248 250 252;
+  --c-slate-100-bg: 241 245 249;
+  --c-slate-200-bg: 226 232 240;
+  --c-slate-300-bg: 203 213 225;
+  --c-slate-500: 100 116 139;
+  --c-slate-600: 71 85 105;
+  --c-slate-700: 51 65 85;
+  --c-slate-800: 30 41 59;
+  --c-slate-900: 15 23 42;
+  --c-slate-200-line: 226 232 240;
+  --c-slate-300-line: 203 213 225;
+  --c-red-200-line: 254 202 202;
+}
+
+html.dark {
+  color-scheme: dark;
+  --c-page: 11 15 23; /* #0B0F17 */
+  --c-surface: 18 24 38; /* #121826 */
+  --c-subtle: 22 30 46; /* #161E2E */
+  --c-hover: 28 38 56; /* #1C2638 */
+  --c-ink: 229 233 240; /* #E5E9F0 */
+  --c-ink-bg: 7 10 16; /* #070A10: behind white text */
+  --c-muted: 151 163 182; /* #97A3B6, 6.9:1 on surface */
+  --c-line: 38 50 71; /* #263247 */
+  --c-hairline: 27 37 54; /* #1B2536 */
+  --c-violet: 167 139 250; /* #A78BFA text/links, 6.4:1 on surface */
+  --c-violet-bg: 109 40 217; /* #6D28D9 behind white text, 7.1:1 */
+  --c-violet-line: 139 92 246;
+  --c-violet-hover: 196 181 253;
+  --c-violet-hover-bg: 124 58 237;
+  --c-violet-tint: 42 31 74; /* #2A1F4A */
+  --c-violet-border: 91 74 138;
+  --c-crit-fg: 252 165 165;
+  --c-crit-bg: 59 18 25;
+  --c-warn-fg: 252 211 77;
+  --c-warn-bg: 58 42 12;
+  --c-warn-border: 245 158 11;
+  --c-ok-fg: 110 231 183;
+  --c-ok-bg: 15 46 34;
+  --c-info-fg: 147 197 253;
+  --c-info-bg: 19 37 74;
+  --c-slate-50-bg: 22 30 46;
+  --c-slate-100-bg: 30 41 59;
+  --c-slate-200-bg: 38 50 71;
+  --c-slate-300-bg: 71 85 105;
+  --c-slate-500: 151 163 182;
+  --c-slate-600: 176 186 201;
+  --c-slate-700: 195 202 214;
+  --c-slate-800: 215 220 228;
+  --c-slate-900: 229 233 240;
+  --c-slate-200-line: 38 50 71;
+  --c-slate-300-line: 58 71 94;
+  --c-red-200-line: 127 29 29;
+}
+
+@layer base {
+  body {
+    @apply m-0 bg-page font-sans text-ink antialiased;
+  }
+  a {
+    color: rgb(var(--c-violet));
+  }
+  a:hover {
+    color: rgb(var(--c-violet-hover));
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-violet));
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card border border-line bg-white;
+  }
+  .h2 {
+    @apply m-0 text-base font-semibold;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .btn {
+    @apply inline-flex min-h-[36px] cursor-pointer items-center justify-center gap-1.5 rounded-btn border border-slate-300 bg-white px-3.5 text-[13px] font-medium text-ink no-underline;
+    font-family: inherit;
+  }
+  .btn:hover {
+    @apply bg-slate-50 text-ink;
+  }
+  .btn:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+  .btn-primary {
+    @apply border-violet bg-violet text-white;
+  }
+  .btn-primary:hover {
+    @apply border-violet-hover bg-violet-hover text-white;
+  }
+  .btn-primary:disabled:hover {
+    @apply border-violet bg-violet;
+  }
+  .input {
+    @apply block min-h-[40px] w-full rounded-btn border border-slate-300 bg-white px-3 text-sm text-ink;
+    font-family: inherit;
+  }
+  .label {
+    @apply mb-1 block text-[13px] font-medium text-slate-700;
+  }
+  .select {
+    @apply min-h-[32px] rounded-btn border border-slate-300 bg-white px-2 text-[13px] text-ink;
+    font-family: inherit;
+  }
+  .table {
+    @apply w-full border-collapse text-[13px];
+  }
+  .table th {
+    @apply whitespace-nowrap border-b border-line bg-subtle px-4 py-2.5 text-left text-xs font-semibold text-muted;
+  }
+  .table td {
+    @apply border-b border-hairline px-4 py-2.5 align-top;
+  }
+  .table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .nav-link {
+    @apply flex min-h-[24px] items-center gap-2.5 rounded-btn px-3 py-2.5 text-sm text-slate-700 no-underline;
+  }
+  .nav-link:hover {
+    @apply bg-hover text-ink;
+  }
+  .nav-link.active {
+    @apply bg-violet-tint font-semibold text-violet;
+  }
+  /* Clusters explorer */
+  .rail-btn {
+    @apply flex h-10 w-10 flex-none cursor-pointer items-center justify-center rounded-card border-0 bg-slate-800 text-xs font-bold text-slate-200 no-underline;
+  }
+  .rail-btn:hover {
+    @apply bg-slate-700 text-white;
+  }
+  .rail-btn.active {
+    @apply bg-violet text-white;
+  }
+  .rail-btn:focus-visible {
+    outline-color: #c4b5fd;
+  }
+  .tree-link {
+    @apply block whitespace-nowrap rounded-btn px-3 py-1.5 text-[13px] text-slate-700 no-underline min-[900px]:pl-[26px];
+  }
+  .tree-link:hover {
+    @apply bg-hover text-ink;
+  }
+  .tree-link.active {
+    @apply bg-violet-tint font-semibold text-violet;
+  }
+  .tab-link {
+    @apply -mb-px border-b-2 border-transparent px-3.5 py-2.5 text-[13px] text-muted no-underline;
+  }
+  .tab-link:hover {
+    @apply text-ink;
+  }
+  .tab-link.active {
+    @apply border-violet font-semibold text-violet;
+  }
+  .link-btn {
+    @apply cursor-pointer border-0 bg-transparent p-0 text-left text-violet;
+    font: inherit;
+  }
+  .link-btn:hover {
+    @apply text-violet-hover underline;
+  }
+  .card-head {
+    @apply flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3.5;
+  }
+
+  /* Markdown from the assistant */
+  .md {
+    @apply text-sm leading-relaxed;
+  }
+  .md > :first-child {
+    margin-top: 0;
+  }
+  .md > :last-child {
+    margin-bottom: 0;
+  }
+  .md p,
+  .md ul,
+  .md ol,
+  .md pre,
+  .md table,
+  .md blockquote {
+    @apply my-2.5;
+  }
+  .md ul {
+    @apply list-disc pl-5;
+  }
+  .md ol {
+    @apply list-decimal pl-5;
+  }
+  .md h1,
+  .md h2,
+  .md h3,
+  .md h4 {
+    @apply mb-1.5 mt-4 text-[15px] font-semibold;
+  }
+  .md code {
+    @apply rounded bg-slate-100 px-1 py-px font-mono text-[12.5px];
+  }
+  .md pre {
+    @apply overflow-x-auto rounded-btn bg-ink p-3 font-mono text-xs leading-relaxed text-slate-200;
+  }
+  .md pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+  .md blockquote {
+    @apply border-l-2 border-line pl-3 text-slate-700;
+  }
+  .md table {
+    @apply block overflow-x-auto border-collapse text-[13px];
+  }
+  .md th,
+  .md td {
+    @apply border border-line px-2.5 py-1.5 text-left;
+  }
+  .md th {
+    @apply bg-subtle font-semibold;
+  }
+}
+
+/* ---------- App shell ---------- */
+@layer components {
+  .nav-group {
+    @apply px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent;
+  }
+  .btn-ghost:hover {
+    @apply bg-hover;
+  }
+  .btn-sm {
+    @apply min-h-[30px] px-2.5 text-xs;
+  }
+  .kbd {
+    @apply rounded border border-slate-300 px-1.5 font-mono text-[11px] leading-[18px] text-muted;
+  }
+  .live-dot {
+    @apply inline-block h-2 w-2 flex-none animate-livepulse rounded-full bg-[#059669];
+  }
+  .pal-item {
+    @apply flex w-full cursor-pointer items-center gap-2.5 border-0 bg-transparent px-3.5 py-2 text-left text-sm text-ink;
+  }
+  .pal-item[aria-selected="true"] {
+    @apply bg-violet-tint;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
+
+/*
+ * Dark mode: hard-coded values in existing pages that the token mapping can't reach.
+ * Light mode is untouched (every rule is scoped to html.dark).
+ */
+html.dark .bg-\[\#FAFAFB\] {
+  background-color: rgb(var(--c-subtle));
+}
+html.dark .hover\:bg-\[\#EEF0F4\]:hover {
+  background-color: rgb(var(--c-hover));
+}
+html.dark .bg-\[\#FEF3C7\] {
+  background-color: rgb(var(--c-warn-bg));
+}
+html.dark .bg-\[\#FDE68A\] {
+  background-color: #854d0e;
+}
+/* Selected segmented / toggle buttons are `bg-ink text-white`: give them the brand colour so they stand out. */
+html.dark .btn.bg-ink,
+html.dark button.bg-ink {
+  background-color: rgb(var(--c-violet-bg));
+  border-color: rgb(var(--c-violet-line));
+}
+html.dark .rail-btn.active {
+  background-color: rgb(var(--c-violet-bg));
+}
+/* SVG charts with literal colours */
+html.dark svg [stroke="#E2E8F0"] {
+  stroke: rgb(var(--c-line));
+}
+html.dark svg [stroke="#fff"] {
+  stroke: rgb(var(--c-surface));
+}
+html.dark svg [fill="#64748B"] {
+  fill: rgb(var(--c-muted));
+}
+html.dark svg [fill="#5B21B6"] {
+  fill: #8b5cf6;
+}
+html.dark svg [fill="#CBD5E1"] {
+  fill: #475569;
+}

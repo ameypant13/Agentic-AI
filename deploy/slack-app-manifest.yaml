@@ -1,0 +1,31 @@
+# Slack app for the Copilot in Slack. Create it at https://api.slack.com/apps
+# → Create New App → From an app manifest, paste this, install it to the
+# workspace, then put the Bot User OAuth Token (xoxb-…) in SLACK_BOT_TOKEN and
+# the Signing Secret (Basic Information) in SLACK_SIGNING_SECRET.
+# Replace the request URL host if the console runs elsewhere.
+display_information:
+  name: Control Hub Copilot
+  description: Ask the Control Hub AI Console about tenants, clusters and errors.
+features:
+  bot_user:
+    display_name: copilot
+    always_online: true
+  app_home:
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read # mentions in channels
+      - chat:write # reply in threads
+      - im:history # direct messages to the bot
+      - users:read # look up who asked…
+      - users:read.email # …by email, to act with their console access
+settings:
+  event_subscriptions:
+    request_url: https://controlhub.app.prophecy.ai/api/slack/events
+    bot_events:
+      - app_mention
+      - message.im
+  org_deploy_enabled: false
+  socket_mode_enabled: false

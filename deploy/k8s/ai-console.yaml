@@ -1,0 +1,227 @@
+# AI console in its own namespace (ai-console) on the management cluster, as
+# deployed at https://controlhub.app.prophecy.ai. Before applying:
+#   - create the ai-console-secrets Secret (see README → Deploy),
+#   - copy the wildcard-app-prophecy-ai-tls-secret into the namespace,
+#   - grant Workload Identity: roles/iam.workloadIdentityUser on
+#     control-hub-admin@prophecy-cloud.iam.gserviceaccount.com for
+#     serviceAccount:prophecy-cloud.svc.id.goog[ai-console/ai-console].
+# Then: kubectl apply -f ai-console.yaml (replace <TAG> first).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-console
+  labels:
+    app: ai-console
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-console
+  namespace: ai-console
+  annotations:
+    # GCP access (GKE clusters, Certificate Manager) as control-hub's GSA.
+    iam.gke.io/gcp-service-account: control-hub-admin@prophecy-cloud.iam.gserviceaccount.com
+---
+# Read-only access to the management cluster: k8s_* tools, the change timeline,
+# the cost collector and the certificate scan of control-hub-prod's TLS secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ai-console-cluster-read
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["*"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ai-console-cluster-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ai-console-cluster-read
+subjects:
+  - kind: ServiceAccount
+    name: ai-console
+    namespace: ai-console
+---
+# SQLite database, log-parser state and hits, metric-rule state. Snapshot the
+# disk before risky changes; set the PV's reclaim policy to Retain so deleting
+# this claim never deletes the data.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-console-data
+  namespace: ai-console
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: standard-rwo
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-console
+  namespace: ai-console
+  labels:
+    app: ai-console
+spec:
+  # One replica: the monitors and workers run in-process, and SQLite on an RWO
+  # volume has one writer.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ai-console
+  template:
+    metadata:
+      labels:
+        app: ai-console
+    spec:
+      serviceAccountName: ai-console
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+        - key: kubernetes.io/arch
+          operator: Equal
+          value: amd64
+          effect: NoSchedule
+      containers:
+        - name: ai-console
+          image: gcr.io/prophecy-cloud/control-hub-ai-console:<TAG>
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8090
+              name: http
+          env:
+            # Prod control-hub, read-only: nothing the console does writes to it.
+            - name: CONTROLHUB_URL
+              value: http://control-hub.control-hub-prod.svc.cluster.local:8003
+            - name: CONTROLHUB_LABEL
+              value: control-hub-prod
+            - name: READ_ONLY
+              value: "true"
+            # Log search of control-hub's own pods is off ("" disables it).
+            - name: CONTROLHUB_LOGS_NAMESPACE
+              value: ""
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: DATABASE_URL
+              value: file:/data/ai-console.db
+            - name: DATA_DIR
+              value: /data
+            - name: LOG_SCAN_INTERVAL
+              value: 60s
+            - name: LOG_SCAN_NAMESPACES
+              value: prophecy
+            - name: HIT_RETENTION_DAYS
+              value: "30"
+            - name: MONITOR_ENABLED
+              value: "true"
+            # true on dev, so test findings and digests never reach the team channel.
+            - name: SLACK_MUTE
+              value: "true"
+            - name: COOKIE_SECURE
+              value: "true"
+            - name: CONSOLE_ADMIN_EMAILS
+              value: <comma-separated admin emails>
+            # Clusters whose Grafana names differ from control-hub's:
+            # <cluster>=<instance>:<prom cluster>:<loki cluster>,...
+            - name: GRAFANA_MAPPINGS
+              value: ""
+          envFrom:
+            # ENCRYPTION_KEY, CONTROLHUB_SERVICE_TOKEN, CONTROLHUB_DEV_SERVICE_TOKEN,
+            # AWS_PROD_*, AZURE_PROD_*, GRAFANA_<NAME>_URL/TOKEN, ATHENA_AUTH_TOKEN,
+            # optional ANTHROPIC_API_KEY, SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET.
+            - secretRef:
+                name: ai-console-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: http
+            periodSeconds: 30
+          resources:
+            # The workers (log parser, cost collector, cert scan) need a full core;
+            # at 100m the API slowed to seconds per request.
+            requests:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 1Gi
+            limits:
+              memory: 2Gi
+              ephemeral-storage: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: ai-console-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-console
+  namespace: ai-console
+  labels:
+    app: ai-console
+spec:
+  selector:
+    app: ai-console
+  ports:
+    - port: 8090
+      targetPort: http
+      name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-console
+  namespace: ai-console
+  annotations:
+    # Copilot replies stream over server-sent events for several minutes.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "900"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: prophecy-nginx
+  tls:
+    # A copy of control-hub's *.app.prophecy.ai wildcard secret; re-copy it when
+    # the wildcard renews (ACM certificates cannot be used by a GKE ingress).
+    - hosts: ["controlhub.app.prophecy.ai"]
+      secretName: wildcard-app-prophecy-ai-tls-secret
+  rules:
+    - host: controlhub.app.prophecy.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-console
+                port:
+                  name: http

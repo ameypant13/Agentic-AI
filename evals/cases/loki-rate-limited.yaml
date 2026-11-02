@@ -1,0 +1,24 @@
+id: loki-rate-limited
+title: Logs missing in Grafana because Loki is rate-limiting ingestion
+question: Why are preview's pod logs missing from Grafana for the last few hours?
+fixtures:
+  - tool: grafana_alerts
+    output: {alerts: [{source: "grafana:Golden-Signals", name: "Loki Dropping Logs (Rate Limited)", state: firing, severity: warning, since: "2026-10-17T06:13:10Z"}]}
+  - tool: grafana_query_logs
+    output: {lines: []}
+  - tool: grafana_query_metrics
+    match: {promql: discarded}
+    output: {series: 1, results: [{labels: {reason: rate_limited}, value: 1450}]}
+  - tool: grafana_query_metrics
+    output: {series: 1, results: [{labels: {}, value: 0}]}
+  - tool: grafana_list_metrics
+    output: {matching: 2, metrics: [loki_discarded_samples_total, loki_distributor_bytes_received_total]}
+  - tool: current_issues
+    output: "preview: no current issues"
+  - tool: k8s_list_pods
+    output: [{name: app-0, status: Running, ready: "1/1"}]
+expect:
+  categories: [configuration, helm-kubernetes, unknown, transient]
+  rootCause:
+    - [rate limit, rate-limit, rate_limited, ingestion limit]
+  maxToolCalls: 10

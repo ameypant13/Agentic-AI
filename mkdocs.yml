@@ -1,0 +1,117 @@
+site_name: Control Hub AI Console
+site_description: Manual for the Control Hub AI Console, the AI-assisted operations console for Prophecy's control-hub fleet.
+# Served by the console itself under /docs/, so every link stays relative.
+site_url: ""
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Concepts:
+      - Architecture: concepts/architecture.md
+      - Security model: concepts/security.md
+      - Data model: concepts/data-model.md
+      - Findings and monitors: concepts/monitors.md
+      - The Copilot agent loop: concepts/copilot-agent.md
+      - Dry-run actions: concepts/actions.md
+      - Learnings: concepts/learnings.md
+      - Log rules and error patterns: concepts/log-rules.md
+      - Metric rules: concepts/metric-rules.md
+      - Certificate inventory: concepts/certificates.md
+      - Cost model: concepts/cost-model.md
+      - Cost changes: concepts/cost-changes.md
+      - Right-sizing batch review: concepts/batch-review.md
+      - Upgrade readiness checks: concepts/readiness.md
+      - Orphaned go-sandboxes: concepts/go-sandboxes.md
+      - "Audit: who changed what": concepts/audit.md
+      - Weekly digest: concepts/digest.md
+  - User guide:
+      - Signing in and finding your way: user-guide/getting-started.md
+      - Fleet overview: user-guide/fleet.md
+      - Issues: user-guide/issues.md
+      - Clusters: user-guide/clusters.md
+      - Certificates: user-guide/certificates.md
+      - Costs: user-guide/costs.md
+      - Upgrade readiness: user-guide/readiness.md
+      - Investigations: user-guide/investigations.md
+      - Copilot: user-guide/copilot.md
+      - Copilot in Slack: user-guide/slack.md
+      - Learnings: user-guide/learnings.md
+      - Log rules and error patterns: user-guide/log-rules.md
+      - Metric rules: user-guide/metric-rules.md
+      - Monitors: user-guide/monitors.md
+      - Guardrails and audit: user-guide/guardrails.md
+      - Weekly digest: user-guide/digest.md
+      - Settings: user-guide/settings.md
+  - Installation & operations:
+      - Prerequisites: operations/prerequisites.md
+      - Building: operations/building.md
+      - Installing on Kubernetes: operations/install.md
+      - Slack app setup: operations/slack.md
+      - Upgrading and redeploying: operations/upgrading.md
+      - Backups: operations/backups.md
+      - Moving the data volume: operations/moving-volume.md
+      - Troubleshooting: operations/troubleshooting.md
+  - Configuration:
+      - Environment variables: reference/configuration.md
+  - Development:
+      - Running locally: development/local.md
+      - Project layout: development/layout.md
+      - Tests and evals: development/testing.md
+      - Adding a Copilot tool: development/adding-a-tool.md
+      - Adding a log rule: development/adding-a-log-rule.md
+      - Frontend development: development/frontend.md
+      - MCP server for Claude Code: development/mcp.md
+      - Working on these docs: development/docs.md
+  - API reference:
+      - Overview and auth: api/index.md
+      - Fleet, findings and monitors: api/fleet.md
+      - Copilot, actions and investigations: api/copilot.md
+      - Clusters and explorer: api/clusters.md
+      - Log rules and patterns: api/log-rules.md
+      - Grafana, metrics and issues: api/grafana.md
+      - Certificates: api/certificates.md
+      - Costs: api/costs.md
+      - Learnings: api/learnings.md
+      - Readiness, digest and guardrails: api/other.md
+  - FAQ: faq.md

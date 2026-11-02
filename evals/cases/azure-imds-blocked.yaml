@@ -1,0 +1,22 @@
+id: azure-imds-blocked
+title: Azure pods cannot get cloud credentials after IMDS access was restricted
+question: On cznl's Azure cluster, Spark jobs started failing to read from storage yesterday. Why?
+fixtures:
+  - tool: find_control_plane
+    output: {matches: [{id: cp-cznl, realm: dedicated-saas, customerName: cznl, clusterName: pc-cznl-1-rg86s-aks, provider: azure, status: OPERATIONAL, infrastructureId: infra-cznl}]}
+  - tool: get_infrastructure
+    output: {id: infra-cznl, clusterName: pc-cznl-1-rg86s-aks, provider: azure, details: {podLinkLocalAccess: None, workloadIdentity: false, updatedAt: "2026-10-16T07:40:00Z"}}
+  - tool: k8s_pod_logs
+    output: {container: sparkedge, lines: ["ManagedIdentityCredential: Get \"http://169.254.169.254/metadata/identity/oauth2/token\": dial tcp 169.254.169.254:80: i/o timeout", "Failed to read abfss://data@cznl.dfs.core.windows.net/..."]}
+  - tool: k8s_list_pods
+    output: [{name: sparkedge-0, status: Running, ready: "1/1", restarts: 2}]
+  - tool: grafana_query_logs
+    output: {lines: [{pod: sparkedge-0, line: "dial tcp 169.254.169.254:80: i/o timeout"}]}
+  - tool: change_timeline
+    output: {events: [{at: "2026-10-16T07:40:00Z", source: aks, what: "Node pool upgrade with IMDS restriction (podLinkLocalAccess=None)"}]}
+expect:
+  categories: [cloud-permissions, configuration]
+  rootCause:
+    - [imds, 169.254.169.254, metadata endpoint, instance metadata]
+    - [podlinklocalaccess, restrict, blocked, workload identity]
+  maxToolCalls: 12

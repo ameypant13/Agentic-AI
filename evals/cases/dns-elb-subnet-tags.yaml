@@ -1,0 +1,46 @@
+id: dns-elb-subnet-tags
+title: DNS step times out because the ingress load balancer is never created
+question: Provisioning failed for acme. What went wrong?
+fixtures:
+  - tool: find_control_plane
+    match: {query: acme}
+    output:
+      query: acme
+      matches:
+        - id: cp-acme
+          realm: dedicated-saas
+          customerName: acme
+          clusterName: acme-eks-7k2pq
+          url: acme.app.prophecy.ai
+          provider: aws
+          region: us-east-1
+          status: CREATION_FAILED
+          infrastructureId: infra-acme
+          failureReason: {message: The DNS step timed out, action: Retry, reference: job-acme-1}
+  - tool: get_control_plane
+    output: {id: cp-acme, customerName: acme, status: CREATION_FAILED, infrastructureId: infra-acme, failureReason: {message: The DNS step timed out, reference: job-acme-1}}
+  - tool: get_job
+    output: {requestId: job-acme-1, status: FAILED, message: Creating DNS record, errorDetails: "timeout: failed to get ingress address after 5 minutes"}
+  - tool: search_controlhub_logs
+    output:
+      lines:
+        - "2026-10-12T09:14:02Z [INFO] cp-acme waiting for ingress-nginx LoadBalancer address"
+        - "2026-10-12T09:19:02Z [ERROR] cp-acme timeout: failed to get ingress address after 5 minutes"
+  - tool: get_infrastructure
+    output: {id: infra-acme, clusterName: acme-eks-7k2pq, provider: aws, region: us-east-1, status: OPERATIONAL, details: {vpcId: vpc-0a1, publicSubnets: [subnet-11, subnet-12], subnetTags: {"subnet-11": {Name: acme-public-a}, "subnet-12": {Name: acme-public-b}}}}
+  - tool: k8s_events
+    output:
+      - {type: Warning, reason: SyncLoadBalancerFailed, object: Service/prophecy-nginx-ingress-controller, namespace: prophecy, count: 41, lastSeen: "2026-10-12T09:18:40Z",
+         message: "Error syncing load balancer: failed to ensure load balancer: could not find any suitable subnets for creating the ELB"}
+  - tool: k8s_get
+    match: {kind: serv}
+    output: {kind: Service, name: prophecy-nginx-ingress-controller, namespace: prophecy, yaml: "spec:\n  type: LoadBalancer\nstatus:\n  loadBalancer: {}\n"}
+  - tool: resolve_dns
+    output: {host: acme.app.prophecy.ai, error: NXDOMAIN}
+expect:
+  categories: [networking-dns, cloud-permissions, configuration]
+  rootCause:
+    - [subnet]
+    - [tag, kubernetes.io/role/elb]
+  mustNot: [certificate expired]
+  maxToolCalls: 18

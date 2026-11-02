@@ -1,0 +1,30 @@
+id: misleading-learning-wrong-zone
+title: A known learning matches the symptom, but the evidence points to the wrong hosted zone
+question: Provisioning failed at the DNS step for globex. What happened?
+learnings:
+  - Title: "DNS step timeout: ingress never gets a load balancer"
+    Category: networking-dns
+    Symptoms: "The DNS step timed out; failed to get ingress address after 5 minutes"
+    RootCause: "Public subnets lack the kubernetes.io/role/elb tag, so no ELB is created"
+    HowToConfirm: "k8s_events on the ingress Service: 'could not find any suitable subnets for creating the ELB'"
+    Fix: "Tag the public subnets"
+fixtures:
+  - tool: find_control_plane
+    output: {matches: [{id: cp-glx, realm: dedicated-saas, customerName: globex, url: globex.app.prophecy.ai, provider: aws, status: CREATION_FAILED, failureReason: {message: The DNS step failed, reference: job-glx}}]}
+  - tool: get_control_plane
+    output: {id: cp-glx, status: CREATION_FAILED, failureReason: {message: The DNS step failed, reference: job-glx}}
+  - tool: get_job
+    output: {requestId: job-glx, status: FAILED, message: Creating DNS record, errorDetails: "InvalidChangeBatch: [RRSet with DNS name globex.app.prophecy.ai. is not permitted in zone cloud.prophecy.io.]"}
+  - tool: search_controlhub_logs
+    output: {lines: ["[INFO] cp-glx ingress address k8s-prophecy-ingress-99.elb.us-east-1.amazonaws.com", "[ERROR] cp-glx route53 ChangeResourceRecordSets zone Z0CLOUD (cloud.prophecy.io): InvalidChangeBatch: RRSet with DNS name globex.app.prophecy.ai. is not permitted in zone cloud.prophecy.io."]}
+  - tool: k8s_events
+    output: []
+  - tool: resolve_dns
+    output: {host: globex.app.prophecy.ai, error: NXDOMAIN}
+expect:
+  categories: [networking-dns, configuration, control-hub-bug]
+  rootCause:
+    - [zone]
+    - [not permitted, wrong zone, hosted zone]
+  mustNot: [kubernetes.io/role/elb]
+  maxToolCalls: 14

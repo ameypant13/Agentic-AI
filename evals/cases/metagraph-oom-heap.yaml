@@ -1,0 +1,30 @@
+id: metagraph-oom-heap
+title: metagraph OOM-killed because its JVM heap is sized at the container limit
+question: metagraph keeps restarting on pfizer-dev. What's going on?
+fixtures:
+  - tool: current_issues
+    output: "pfizer-dev-bchr9-srxm2: metagraph-prophecy OOMKilled 6 times in 24h; memory at 99% of its 16000Mi limit before each kill"
+  - tool: k8s_list_pods
+    output: [{name: metagraph-0, namespace: prophecy, status: Running, ready: "1/1", restarts: 6, memory: 15.2Gi, memLimit: 16000Mi, issue: "OOMKilled (last restart)", issueSeverity: warning}]
+  - tool: k8s_describe_pod
+    output:
+      name: metagraph-0
+      containers:
+        - {name: metagraph, restarts: 6, lastTerminated: "OOMKilled, exit code 137", memRequest: 16000Mi, memLimit: 16000Mi, cpuRequest: "4"}
+      manifest: "env:\n- name: JAVA_OPTS\n  value: -Xms15g -Xmx15g -XX:+UseG1GC\n"
+  - tool: k8s_pod_logs
+    output: {container: metagraph, previous: true, lines: ["[gc] Pause Young (G1 Evacuation Pause) 15103M->14920M(15360M) 412ms", "[gc] Pause Full (G1 Compaction Pause) 15340M->15102M(15360M) 3.1s"]}
+  - tool: grafana_query_metrics
+    match: {promql: jvm}
+    output: {series: 1, results: [{labels: {job: metagraph}, value: 15.0e9}]}
+  - tool: grafana_query_metrics
+    output: {series: 1, results: [{labels: {container: metagraph}, value: 16.7e9}]}
+  - tool: query_costs
+    output: {recommendations: [{Workload: "pfizer-dev-bchr9-srxm2/prophecy/Deployment/metagraph-prophecy", Current: "cpu 4, memory 16000Mi", Recommended: "cpu 120m, memory 20000Mi", OOMDays: 4, Notes: ["OOM-killed on 4 of 30 days: memory raised, never lowered."]}]}
+expect:
+  categories: [helm-kubernetes, configuration, cloud-capacity]
+  rootCause:
+    - [oom]
+    - [xmx, heap]
+    - [limit, 16000mi, 16000 mi]
+  maxToolCalls: 14

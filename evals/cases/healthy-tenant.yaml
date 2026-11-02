@@ -1,0 +1,25 @@
+id: healthy-tenant
+title: Nothing is wrong; the Copilot should say so and not invent a cause
+question: Is medmutual down? A customer said the UI felt slow this morning.
+fixtures:
+  - tool: find_control_plane
+    output: {matches: [{id: cp-mm, realm: dedicated-saas, customerName: medmutual, url: medmutual.app.prophecy.ai, provider: aws, status: OPERATIONAL, postDeployStatus: completed}]}
+  - tool: current_issues
+    output: "medmutual: no current issues"
+  - tool: probe_https
+    output: {url: "https://medmutual.app.prophecy.ai", status: 200, timeMs: 210}
+  - tool: check_tls_certificate
+    output: {host: medmutual.app.prophecy.ai, daysLeft: 61}
+  - tool: k8s_list_pods
+    output: [{name: app-0, status: Running, ready: "1/1", restarts: 0}, {name: metagraph-0, status: Running, ready: "1/1", restarts: 0}, {name: edweb-0, status: Running, ready: "2/2", restarts: 0}]
+  - tool: grafana_query_metrics
+    output: {series: 1, results: [{labels: {}, points: [["10-17 08:00", 0.21], ["10-17 09:00", 0.24], ["10-17 10:00", 0.19]]}]}
+  - tool: athena_read
+    output: {data: {isProphecyDown: false, isAnyServiceDown: false}}
+  - tool: k8s_events
+    output: []
+expect:
+  noInvestigation: true
+  rootCause:
+    - [healthy, no sign, not down, is up, operational, no current issues, nothing wrong]
+  maxToolCalls: 12

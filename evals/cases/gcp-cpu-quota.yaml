@@ -1,0 +1,21 @@
+id: gcp-cpu-quota
+title: Execution plane creation fails on the regional CPU quota
+question: Creating a new execution plane for jde in us-east1 failed. Why?
+fixtures:
+  - tool: find_control_plane
+    output: {matches: [{id: cp-jde, realm: sap, customerName: jde, provider: gcp, region: us-east1, status: OPERATIONAL}]}
+  - tool: list_execution_planes
+    output: [{id: ep-jde-3, status: CREATION_FAILED, region: us-east1, failureReason: {message: "Creating the GKE cluster failed", reference: job-ep-3}}]
+  - tool: get_execution_plane
+    output: {id: ep-jde-3, status: CREATION_FAILED, failureReason: {message: Creating the GKE cluster failed, reference: job-ep-3}}
+  - tool: get_job
+    output: {requestId: job-ep-3, status: FAILED, message: Creating GKE cluster, errorDetails: "googleapi: Error 403: Insufficient regional quota to satisfy request: resource \"CPUS\": request requires '32.0' and is short '8.0'. project has a quota of '96.0' with '24.0' available."}
+  - tool: search_controlhub_logs
+    output: {lines: ["[ERROR] ep-jde-3 create cluster: googleapi: Error 403: Insufficient regional quota ... CPUS ... short '8.0'"]}
+expect:
+  categories: [cloud-quota]
+  rootCause:
+    - [quota]
+    - [cpu]
+  mustNot: [permission denied for schema]
+  maxToolCalls: 10

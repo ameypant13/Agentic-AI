@@ -1,0 +1,25 @@
+id: acm-validation-cname-missing
+title: ACM certificate cannot renew because its DNS validation record was deleted
+question: The certificate for toyota-vista expires in 9 days and hasn't renewed. Why?
+fixtures:
+  - tool: list_certificates
+    output: |
+      toyota-vista.app.prophecy.ai  ACM  arn:aws:acm:us-west-2:111:certificate/abc  expires in 9 days  status ISSUED  renewal PENDING_VALIDATION
+        problem: renewal needs DNS validation record _3f2a1b.toyota-vista.app.prophecy.ai CNAME _9c8d.acm-validations.aws. — record missing in Route53
+  - tool: resolve_dns
+    match: {host: _3f2a1b}
+    output: {host: _3f2a1b.toyota-vista.app.prophecy.ai, error: NXDOMAIN}
+  - tool: resolve_dns
+    output: {host: toyota-vista.app.prophecy.ai, cname: k8s-prophecy-ingress-1234.elb.us-west-2.amazonaws.com, addresses: ["52.1.2.3"]}
+  - tool: check_tls_certificate
+    output: {host: toyota-vista.app.prophecy.ai, issuer: Amazon RSA 2048 M03, notAfter: "2026-10-26T23:59:59Z", daysLeft: 9, sans: [toyota-vista.app.prophecy.ai]}
+  - tool: find_control_plane
+    output: {matches: [{id: cp-tv, realm: dedicated-saas, customerName: toyota-vista, url: toyota-vista.app.prophecy.ai, provider: aws, status: OPERATIONAL}]}
+  - tool: read_knowledge_node
+    output: "ACM certificates are DNS-validated; control-hub creates the validation CNAME in the prophecy.ai hosted zone at create time. If the record is removed, ACM managed renewal stays in PENDING_VALIDATION and the certificate expires."
+expect:
+  categories: [certificates]
+  rootCause:
+    - [cname, validation record, validation cname]
+    - [missing, deleted, removed, nxdomain, does not exist]
+  maxToolCalls: 12

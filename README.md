@@ -61,11 +61,11 @@ cloud platform token), and automatic investigation of new findings.
 
 ```
 cmd/ai-console        the web server + monitors
-cmd/control-hub-mcp   the same read-only tools as an MCP server for Claude Code, plus repair_certificate and renew_wildcard_certificate (admin token; dry run first)
+cmd/cloud-platform-mcp   the same read-only tools as an MCP server for Claude Code, plus repair_certificate and renew_wildcard_certificate (admin token; dry run first)
 internal/agent        Claude tool loop, prompts, record_investigation / propose_action, action execution
 internal/tools        read-only tools shared by the Copilot and the MCP server
 internal/monitor      scheduled checks → findings → Slack
-internal/controlhub   cloud platform HTTP client + secret redaction
+internal/cloudplatform   cloud platform HTTP client + secret redaction
 internal/server       HTTP API (see API.md), sessions, SPA serving
 internal/store        the console's own tables (gorm on SQLite; /data/ai-console.db on the PVC in cluster)
 web/                  React + Vite + Tailwind UI
@@ -78,9 +78,9 @@ deploy/k8s            Deployment, Service, Ingress, RBAC
 |---|---|---|
 | `ENCRYPTION_KEY` | — **required** | `openssl rand -base64 32`. Encrypts stored Claude keys and session tokens. |
 | `DATABASE_URL` | `file:ai-console.db` | SQLite path; `file:/data/ai-console.db` in cluster (a `postgres://…` URL also works). |
-| `CONTROLHUB_URL` | `http://control-hub:8003` | |
-| `CONTROLHUB_SERVICE_TOKEN` | — required when monitors are on | Cloud platform admin token the monitors use to list every realm. Read-only: the client refuses any non-GET request made with it. |
-| `CONTROLHUB_DEV_SERVICE_TOKEN` | — | Same for cloud platform dev; also read-only. |
+| `CLOUD_PLATFORM_URL` | `http://cloud-platform:8003` | |
+| `CLOUD_PLATFORM_SERVICE_TOKEN` | — required when monitors are on | Cloud platform admin token the monitors use to list every realm. Read-only: the client refuses any non-GET request made with it. |
+| `CLOUD_PLATFORM_DEV_SERVICE_TOKEN` | — | Same for cloud platform dev; also read-only. |
 | `ANTHROPIC_API_KEY` | — | Shared team key for people without a personal key. Empty = personal keys only. |
 | `CLAUDE_MODEL` / `CLAUDE_EFFORT` | `claude-opus-5-5` / `high` | |
 | `MONITOR_ENABLED` / `MONITOR_INTERVAL` | `true` / `5m` | |
@@ -89,29 +89,29 @@ deploy/k8s            Deployment, Service, Ingress, RBAC
 | `SLACK_BOT_TOKEN` / `SLACK_SIGNING_SECRET` | — | Turn on the Copilot in Slack (`POST /api/slack/events`); create the app from `deploy/slack-app-manifest.yaml`. |
 | `AWS_PROD_ACCESS_KEY_ID` / `AWS_PROD_SECRET_ACCESS_KEY` | — | EKS access; same values as the cloud platform. |
 | `AZURE_PROD_TENANT_ID` / `_CLIENT_ID` / `_CLIENT_SECRET` / `_SUBSCRIPTION_ID` | — | AKS access; same values as the cloud platform. |
-| `POD_NAMESPACE` / `CONTROLHUB_POD_SELECTOR` | — / `app=control-hub` | Enables log search; set from the downward API in cluster. |
+| `POD_NAMESPACE` / `CLOUD_PLATFORM_POD_SELECTOR` | — / `app=cloud-platform` | Enables log search; set from the downward API in cluster. |
 | `KG_DIR` / `STATIC_DIR` / `LISTEN_ADDR` | image paths / `:8090` | |
 | `COOKIE_SECURE` | `true` | `false` only for local http. |
 | `PATTERN_IGNORE_SERVICES` | `sla-tests,e2e-tests` | Workloads left out of error-pattern mining (their errors are expected). Patterns are only mined from `prophecy*` namespaces and `LOG_SCAN_NAMESPACES`. |
 | `DATA_DIR` / `LOG_SCAN_INTERVAL` / `LOG_SCAN_NAMESPACES` / `HIT_RETENTION_DAYS` | `./data` / `60s` / `prophecy` / `30` | Background log parser (put `DATA_DIR` on the PVC). |
-| `CERT_SCAN_INTERVAL` | `6h` | Certificate inventory rescan interval. Needs `CONTROLHUB_SERVICE_TOKEN` for the tenant list. |
-| `CERT_SECRET_NAMESPACES` | `control-hub-prod` | Namespaces whose `kubernetes.io/tls` secrets are tracked as wildcards (only `tls.crt` is parsed). Needs read access to secrets there. |
+| `CERT_SCAN_INTERVAL` | `6h` | Certificate inventory rescan interval. Needs `CLOUD_PLATFORM_SERVICE_TOKEN` for the tenant list. |
+| `CERT_SECRET_NAMESPACES` | `cloud-platform-prod` | Namespaces whose `kubernetes.io/tls` secrets are tracked as wildcards (only `tls.crt` is parsed). Needs read access to secrets there. |
 | `CERT_ACM_REGIONS` | US regions | ACM regions read with `AWS_PROD_*`. |
 | `COST_ENABLED` / `COST_BACKFILL_DAYS` / `COST_RETENTION_DAYS` | `true` / `30` / `400` | Estimated workload cost from Grafana metrics (see API.md → Costs). AWS list prices need `pricing:GetProducts` on the cloud platform AWS user; without it nodes use OpenCost's default rates. |
 | `GRAFANA_MAPPINGS` | — | Cluster → Grafana overrides for clusters whose cloud platform name differs from their Grafana labels: `<cluster>=<instance>:<metrics cluster>[:<loki cluster>]`, comma-separated. Mappings saved in Settings win. |
 | `CERT_REPAIR_ENABLED` | `false` | Lets admins ask the cloud platform to recreate a certificate's renewal DNS records (the one write allowed with `READ_ONLY`; runs with the admin's own token). Needs the platform with `POST /api/certificates/repair`. |
 | `AUDIT_GCP_PROJECTS` | `prophecy-cloud` | Projects whose Cloud Audit Logs the admin-only `audit_search` reads; empty disables. |
 | `CERT_GCP_PROJECT_FILTER` | `id:sap-*` | Resource Manager filter for projects whose Certificate Manager certificates are read; empty disables. |
-| `READ_ONLY` / `CONTROLHUB_LABEL` / `CONTROLHUB_LOGS_NAMESPACE` | `false` / `control-hub` / `POD_NAMESPACE` | Read-only turns off all writes; required against a prod cloud platform. |
+| `READ_ONLY` / `CLOUD_PLATFORM_LABEL` / `CLOUD_PLATFORM_LOGS_NAMESPACE` | `false` / `cloud-platform` / `POD_NAMESPACE` | Read-only turns off all writes; required against a prod cloud platform. |
 
 ## Run locally
 
 ```bash
-# terminal 1: control-hub (dev) on localhost:8003
-kubectl -n control-hub-dev port-forward svc/control-hub 8003:8003
+# terminal 1: cloud-platform (dev) on localhost:8003
+kubectl -n cloud-platform-dev port-forward svc/cloud-platform 8003:8003
 
 # terminal 2: the console API on :8090 (SQLite, monitors off, no log search)
-ENCRYPTION_KEY=$(openssl rand -base64 32) CONTROLHUB_URL=http://localhost:8003 \
+ENCRYPTION_KEY=$(openssl rand -base64 32) CLOUD_PLATFORM_URL=http://localhost:8003 \
 MONITOR_ENABLED=false ANTHROPIC_API_KEY=... make run
 
 # terminal 3: the UI with hot reload on :5173 (proxies /api to :8090)
@@ -131,14 +131,14 @@ cd web && npm run build    # UI: type-check + bundle (tsc --noEmit alone is not 
 
 Dev runs at **https://example.com** in its own namespace, `ai-console`, on the
 management cluster (configure ingress, TLS and DNS for your environment). It reads **prod** cloud platform read-only
-(`READ_ONLY=true`, `CONTROLHUB_URL=http://control-hub.control-hub-prod.svc.cluster.local:8003`).
+(`READ_ONLY=true`, `CLOUD_PLATFORM_URL=http://cloud-platform.cloud-platform-prod.svc.cluster.local:8003`).
 Data (SQLite DB, parser and rule state) lives on PVC `ai-console-data` at `/data`.
 
 1. Create the namespace and service account. The service account needs Workload Identity
-   (`iam.gke.io/gcp-service-account: control-hub-admin@prophecy-cloud.iam.gserviceaccount.com`,
+   (`iam.gke.io/gcp-service-account: cloud-platform-admin@prophecy-cloud.iam.gserviceaccount.com`,
    plus `roles/iam.workloadIdentityUser` for `prophecy-cloud.svc.id.goog[ai-console/ai-console]`)
    and the `ai-console-cluster-read` ClusterRoleBinding.
-2. Create the secret `ai-console-secrets` in `ai-console` (`ENCRYPTION_KEY`, `CONTROLHUB_SERVICE_TOKEN`,
+2. Create the secret `ai-console-secrets` in `ai-console` (`ENCRYPTION_KEY`, `CLOUD_PLATFORM_SERVICE_TOKEN`,
    cloud and Grafana credentials, optional `ANTHROPIC_API_KEY`, `SLACK_WEBHOOK_URL`, `ATHENA_AUTH_TOKEN`).
    Keep `ENCRYPTION_KEY` stable: changing it makes stored keys and sessions unreadable.
 3. Copy `wildcard-app-prophecy-ai-tls-secret` into `ai-console`. The copy does not renew with the
@@ -150,9 +150,9 @@ Data (SQLite DB, parser and rule state) lives on PVC `ai-console-data` at `/data
 
 ```bash
 make mcp
-claude mcp add control-hub -- env CONTROLHUB_URL=http://localhost:8003 \
-  CONTROLHUB_TOKEN=<your cloud platform token> KG_DIR=<repo>/.knowledgegraph \
-  $(pwd)/bin/control-hub-mcp
+claude mcp add cloud-platform -- env CLOUD_PLATFORM_URL=http://localhost:8003 \
+  CLOUD_PLATFORM_TOKEN=<your cloud platform token> KG_DIR=<repo>/.knowledgegraph \
+  $(pwd)/bin/cloud-platform-mcp
 ```
 
 The MCP server is read-only and has no log search (that needs the in-cluster service account).
